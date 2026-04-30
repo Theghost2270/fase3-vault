@@ -1,0 +1,4 @@
+/tmp/vault_init_keys.json
+*.pem
+*.key
+.env

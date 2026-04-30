@@ -1,0 +1,129 @@
+---
+- name: Esperar puerto 8200
+  wait_for:
+    host: 127.0.0.1
+    port: 8200
+    timeout: 30
+
+- name: Verificar si ya está inicializado
+  uri:
+    url: "http://127.0.0.1:8200/v1/sys/init"
+    method: GET
+    return_content: yes
+  register: init_status
+
+- name: Inicializar Vault
+  uri:
+    url: "http://127.0.0.1:8200/v1/sys/init"
+    method: POST
+    body_format: json
+    body:
+      secret_shares: 1
+      secret_threshold: 1
+    return_content: yes
+  register: init_result
+  when: not (init_status.json.initialized | bool)
+
+- name: Guardar claves en local
+  copy:
+    content: "{{ init_result.json | to_nice_json }}"
+    dest: "/tmp/vault_init_keys.json"
+    mode: "0600"
+  when: init_result.json is defined
+  delegate_to: localhost
+  become: false
+
+- name: Leer claves
+  slurp:
+    src: "/tmp/vault_init_keys.json"
+  register: keys_raw
+  delegate_to: localhost
+  become: false
+
+- name: Parsear claves
+  set_fact:
+    vault_unseal_key: "{{ (keys_raw.content | b64decode | from_json).keys_base64[0] }}"
+    vault_root_token: "{{ (keys_raw.content | b64decode | from_json).root_token }}"
+
+- name: Ver si está sellado
+  uri:
+    url: "http://127.0.0.1:8200/v1/sys/seal-status"
+    method: GET
+    return_content: yes
+  register: seal_status
+
+- name: Unseal Vault
+  uri:
+    url: "http://127.0.0.1:8200/v1/sys/unseal"
+    method: POST
+    body_format: json
+    body:
+      key: "{{ vault_unseal_key }}"
+    return_content: yes
+  when: seal_status.json.sealed | bool
+
+- name: Habilitar KV v2 en cicd/
+  uri:
+    url: "http://127.0.0.1:8200/v1/sys/mounts/cicd"
+    method: POST
+    headers:
+      X-Vault-Token: "{{ vault_root_token }}"
+    body_format: json
+    body:
+      type: "kv"
+      options:
+        version: "2"
+    status_code: [200, 204, 400]
+
+- name: Crear política cicd-policy
+  uri:
+    url: "http://127.0.0.1:8200/v1/sys/policies/acl/cicd-policy"
+    method: POST
+    headers:
+      X-Vault-Token: "{{ vault_root_token }}"
+    body_format: json
+    body:
+      policy: |
+        path "cicd/data/github-actions" {
+          capabilities = ["read", "list"]
+        }
+        path "cicd/metadata/github-actions" {
+          capabilities = ["read", "list"]
+        }
+    status_code: [200, 204]
+
+- name: Escribir secretos placeholder
+  uri:
+    url: "http://127.0.0.1:8200/v1/cicd/data/github-actions"
+    method: POST
+    headers:
+      X-Vault-Token: "{{ vault_root_token }}"
+    body_format: json
+    body:
+      data:
+        AZURE_CLIENT_ID: "REEMPLAZAR"
+        AZURE_CLIENT_SECRET: "REEMPLAZAR"
+        AZURE_TENANT_ID: "REEMPLAZAR"
+        AZURE_SUBSCRIPTION_ID: "REEMPLAZAR"
+        DOCKER_USER: "REEMPLAZAR"
+        DOCKER_PASSWORD: "REEMPLAZAR"
+    status_code: [200, 204]
+
+- name: Crear token para GitHub Actions
+  uri:
+    url: "http://127.0.0.1:8200/v1/auth/token/create"
+    method: POST
+    headers:
+      X-Vault-Token: "{{ vault_root_token }}"
+    body_format: json
+    body:
+      policies: ["cicd-policy"]
+      ttl: "8760h"
+      renewable: true
+      display_name: "github-actions-cicd"
+    return_content: yes
+  register: cicd_token
+
+- name: Mostrar token para GitHub Actions
+  debug:
+    msg: "VAULT_TOKEN = {{ cicd_token.json.auth.client_token }}"

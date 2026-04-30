@@ -1,0 +1,33 @@
+---
+- name: Desplegar vault.hcl
+  template:
+    src: vault.hcl.j2
+    dest: "{{ vault_config_dir }}/vault.hcl"
+    owner: vault
+    group: vault
+    mode: "0640"
+  notify: Restart Vault
+
+- name: Desplegar vault.service
+  template:
+    src: vault.service.j2
+    dest: /etc/systemd/system/vault.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart Vault
+
+- name: Habilitar e iniciar Vault
+  systemd:
+    name: vault
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Exportar VAULT_ADDR
+  lineinfile:
+    path: /etc/environment
+    line: 'VAULT_ADDR="http://127.0.0.1:8200"'
+    create: yes

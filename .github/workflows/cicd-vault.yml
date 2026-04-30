@@ -1,0 +1,29 @@
+name: CI/CD con Vault en Azure
+
+on:
+  push:
+    branches: [main]
+
+env:
+  VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Importar secretos desde Vault
+        uses: hashicorp/vault-action@v3
+        id: secrets
+        with:
+          url: ${{ secrets.VAULT_ADDR }}
+          token: ${{ secrets.VAULT_TOKEN }}
+          secrets: |
+            cicd/data/github-actions AZURE_CLIENT_ID       | AZURE_CLIENT_ID ;
+            cicd/data/github-actions AZURE_CLIENT_SECRET   | AZURE_CLIENT_SECRET ;
+            cicd/data/github-actions AZURE_TENANT_ID       | AZURE_TENANT_ID ;
+            cicd/data/github-actions AZURE_SUBSCRIPTION_ID | AZURE_SUBSCRIPTION_ID
+
+      - name: Verificar secretos
+        run: echo "Secretos importados correctamente desde Vault"

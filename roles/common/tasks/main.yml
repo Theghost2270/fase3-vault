@@ -1,0 +1,41 @@
+---
+- name: Actualizar apt
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Instalar dependencias
+  apt:
+    name: [unzip, curl, jq, python3-pip]
+    state: present
+
+- name: Instalar hvac
+  pip:
+    name: hvac
+    state: present
+    extra_args: --break-system-packages
+
+- name: Crear grupo vault
+  group:
+    name: vault
+    system: yes
+
+- name: Crear usuario vault
+  user:
+    name: vault
+    group: vault
+    system: yes
+    shell: /bin/false
+    create_home: no
+
+- name: Abrir puerto 8200 en UFW
+  ufw:
+    rule: allow
+    port: "8200"
+    proto: tcp
+
+- name: Abrir puerto 8201 en UFW
+  ufw:
+    rule: allow
+    port: "8201"
+    proto: tcp

@@ -1,0 +1,16 @@
+ui            = {{ vault_ui_enabled | lower }}
+disable_mlock = false
+api_addr      = "{{ vault_api_addr }}"
+cluster_addr  = "{{ vault_cluster_addr }}"
+
+storage "file" {
+  path = "{{ vault_data_dir }}"
+}
+
+listener "tcp" {
+  address     = "{{ vault_listen_address }}"
+  tls_disable = "true"
+}
+
+log_level  = "Info"
+log_format = "json"

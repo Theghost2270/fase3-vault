@@ -1,0 +1,43 @@
+---
+- name: Verificar si Vault existe
+  stat:
+    path: "/usr/local/bin/vault"
+  register: vault_binary
+
+- name: Descargar Vault
+  get_url:
+    url: "{{ vault_download_url }}"
+    dest: "/tmp/vault_{{ vault_version }}_linux_amd64.zip"
+  when: not vault_binary.stat.exists
+
+- name: Descomprimir Vault
+  unarchive:
+    src: "/tmp/vault_{{ vault_version }}_linux_amd64.zip"
+    dest: "{{ vault_install_dir }}"
+    remote_src: yes
+  when: not vault_binary.stat.exists
+
+- name: Permisos al binario
+  file:
+    path: "{{ vault_install_dir }}/vault"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Setcap IPC_LOCK
+  capabilities:
+    path: "{{ vault_install_dir }}/vault"
+    capability: cap_ipc_lock+ep
+    state: present
+
+- name: Crear directorios
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: vault
+    group: vault
+    mode: "0750"
+  loop:
+    - "{{ vault_config_dir }}"
+    - "{{ vault_data_dir }}"
+    - "{{ vault_tls_dir }}"

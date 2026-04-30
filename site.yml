@@ -1,0 +1,11 @@
+---
+- name: Aprovisionar servidor HashiCorp Vault
+  hosts: vault_server
+  become: true
+  vars_files:
+    - vars/vault_vars.yml
+  roles:
+    - role: common
+    - role: vault_install
+    - role: vault_configure
+    - role: vault_init
